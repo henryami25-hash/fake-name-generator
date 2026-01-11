@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Admin Panel - Fake Name Generator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- 🔥 Firebase CDN (compat, mobile safe) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<script>
+/* ========= FIREBASE CONFIG (YOUR SAME CDN) ========= */
+const firebaseConfig = {
+  apiKey: "AIzaSyCZ08SgQo36dVouHYVatQjOPBjR7FBuiTM",
+  authDomain: "fake-name-generator-445ef.firebaseapp.com",
+  projectId: "fake-name-generator-445ef",
+  storageBucket: "fake-name-generator-445ef.appspot.com",
+  messagingSenderId: "173185143834",
+  appId: "1:173185143834:web:e39cfc5ca34abfc458eda3"
+};
+
+/* ========= INIT ========= */
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+/* ========= LOGIN ========= */
+function login(){
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value;
+
+  auth.signInWithEmailAndPassword(email, password)
+    .then(()=>{
+      document.getElementById("loginBox").style.display="none";
+      document.getElementById("panel").style.display="block";
+      loadNotice();
+    })
+    .catch(e=>alert(e.message));
+}
+
+function logout(){
+  auth.signOut().then(()=>location.reload());
+}
+
+/* ========= SAVE NAMES ========= */
+function saveNames(){
+  const country = document.getElementById("country").value.trim();
+  const gender = document.getElementById("gender").value;
+  const names = document.getElementById("names").value
+    .split("\n").map(n=>n.trim()).filter(Boolean);
+
+  if(!country || names.length===0){
+    alert("Country & names required");
+    return;
+  }
+
+  db.collection("names")
+    .where("country","==",country)
+    .where("gender","==",gender)
+    .get()
+    .then(snap=>{
+      if(snap.empty){
+        return db.collection("names").add({country,gender,names});
+      }else{
+        snap.forEach(doc=>{
+          db.collection("names").doc(doc.id).update({names});
+        });
+      }
+    })
+    .then(()=>alert("Names saved successfully ✅"))
+    .catch(e=>alert(e.message));
+}
+
+/* ========= DELETE COUNTRY ========= */
+function deleteCountry(){
+  const country = document.getElementById("country").value.trim();
+  if(!country){
+    alert("Country name required");
+    return;
+  }
+
+  if(!confirm(`DELETE ${country}? This will remove ALL data.`)) return;
+
+  db.collection("names")
+    .where("country","==",country)
+    .get()
+    .then(snap=>{
+      if(snap.empty){
+        alert("No data found for this country");
+        return;
+      }
+      const batch = db.batch();
+      snap.forEach(doc=>batch.delete(doc.ref));
+      return batch.commit();
+    })
+    .then(()=>{
+      alert(`Country "${country}" deleted`);
+      document.getElementById("names").value="";
+    })
+    .catch(e=>alert(e.message));
+}
+
+/* ========= NOTICE SYSTEM ========= */
+function saveNotice(){
+  const text = document.getElementById("noticeText").value.trim();
+  const tg = document.getElementById("tgLink").value.trim();
+  const active = document.getElementById("noticeActive").checked;
+
+  db.collection("settings").doc("notice").set({
+    noticeText: text,
+    tgLink: tg,
+    noticeActive: active
+  }).then(()=>alert("Notice updated ✅"));
+}
+
+function loadNotice(){
+  db.collection("settings").doc("notice").get().then(doc=>{
+    if(!doc.exists) return;
+    const d = doc.data();
+    document.getElementById("noticeText").value = d.noticeText || "";
+    document.getElementById("tgLink").value = d.tgLink || "";
+    document.getElementById("noticeActive").checked = !!d.noticeActive;
+  });
+}
+</script>
+
+<style>
+body{
+  background:#0b1220;
+  color:#fff;
+  font-family:Arial;
+  padding:20px;
+}
+.box{
+  max-width:460px;
+  margin:auto;
+  background:#121c2f;
+  padding:20px;
+  border-radius:12px;
+}
+h2,h3{margin-top:0}
+input,select,textarea,button{
+  width:100%;
+  margin:8px 0;
+  padding:10px;
+  border-radius:8px;
+  border:none;
+}
+textarea{height:140px}
+button{
+  background:#4ea1ff;
+  color:#fff;
+  font-weight:bold;
+}
+.danger{background:#ff4d4d}
+.logout{background:#6b7280}
+label{font-size:14px}
+</style>
+</head>
+
+<body>
+
+<!-- LOGIN -->
+<div id="loginBox" class="box">
+  <h2>Admin Login</h2>
+  <input id="email" placeholder="Admin Email">
+  <input id="password" type="password" placeholder="Password">
+  <button onclick="login()">Login</button>
+</div>
+
+<!-- PANEL -->
+<div id="panel" class="box" style="display:none">
+
+  <h2>Admin Panel</h2>
+
+  <!-- COUNTRY / NAMES -->
+  <input id="country" placeholder="Country (USA, Bangladesh)">
+  <select id="gender">
+    <option value="male">Male</option>
+    <option value="female">Female</option>
+  </select>
+  <textarea id="names" placeholder="One name per line"></textarea>
+
+  <button onclick="saveNames()">Save Names</button>
+  <button class="danger" onclick="deleteCountry()">Delete Country</button>
+
+  <hr style="margin:20px 0">
+
+  <!-- NOTICE -->
+  <h3>User Notice / Telegram</h3>
+  <textarea id="noticeText" placeholder="Notice text for users"></textarea>
+  <input id="tgLink" placeholder="Telegram group link (https://t.me/...)">
+  <label>
+    <input type="checkbox" id="noticeActive"> Enable notice
+  </label>
+  <button onclick="saveNotice()">Save Notice</button>
+
+  <hr style="margin:20px 0">
+  <button class="logout" onclick="logout()">Logout</button>
+
+</div>
+
+</body>
+</html>
